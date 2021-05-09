@@ -153,7 +153,51 @@ def file_to_winrates(filename, bin_size=5, min_elo=None, max_elo=None):
     diff_data = make_diff_data(cleaned_data, min_elo=min_elo, max_elo=max_elo)
     winrate_data = make_winrate_data(diff_data, bin_size=bin_size)
     return winrate_data
-    
+
+
+######################
+### Winrate tables ###
+######################
+
+def make_winrate_table(filename):
+    '''
+    Returns a dict with keys (player1, player2) and values {'numgames': numgames between p1 and p2, 'player1_winrate': average score of p1 vs p2}
+    The keys are always sorted alphabetically. This doesn't keep track of who was white and who was black.
+    '''
+    to_record = ['White', 'Black', 'Result']
+    data = lichess_pgn_to_data(filename, to_record=to_record)
+    winrate_table = {}
+    for game in data:
+        white = game['White']
+        black = game['Black']
+        result = game['Result']
+        players = [white, black]
+        reverse = (sorted(players)[0] != players[0])
+        if reverse:
+            if result == '1-0':
+                result = '0-1'
+            elif result == '0-1':
+                result = '1-0'
+        if result == '1-0':
+            player1_score = 1.0
+        elif result == '0-1':
+            player1_score = 0.0
+        elif result == '1/2-1/2':
+            player1_score = 0.5
+        else:
+            raise ValueError('In make_winrate_table, got result '+str(result))
+        players = tuple(sorted(players))
+        if players not in winrate_table:
+            winrate_table[players] = {'numgames':1, 'player1_winrate':player1_score}
+        else:
+            old_numgames = winrate_table[players]['numgames']
+            old_player1_winrate = winrate_table[players]['player1_winrate']
+            new_player1_winrate = (old_player1_winrate * old_numgames + player1_score)/(old_numgames + 1)
+            winrate_table[players]['numgames'] = old_numgames + 1
+            winrate_table[players]['player1_winrate'] = new_player1_winrate
+    return winrate_table
+
+
 
 #This is the standard boilerplate that calls the main() function.
 if __name__ == '__main__':
