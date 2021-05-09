@@ -218,9 +218,9 @@ def get_nonempty_triples(opponent_dict, winrate_table):
                     trip = [p,q,r]
                     trip = tuple(sorted(trip))
                     (ps,qs,rs) = trip
-                    p_vs_q = winrate_table[(ps,qs)]['player1_winrate']
-                    p_vs_r = winrate_table[(ps,rs)]['player1_winrate']
-                    q_vs_r = winrate_table[(qs,rs)]['player1_winrate']
+                    p_vs_q = winrate_table[(ps,qs)]
+                    p_vs_r = winrate_table[(ps,rs)]
+                    q_vs_r = winrate_table[(qs,rs)]
                     triples[trip] = (p_vs_q, p_vs_r, q_vs_r)
     return triples
 
@@ -239,6 +239,19 @@ def get_useful_triples(triples):
             useful_triples[trip] = (p_vs_q, p_vs_r, q_vs_r)
     return useful_triples
 
+
+def file_to_nonempty_triples(filename):
+    '''
+    Returns a dict where
+      the keys are triples of players (p,q,r) in alphabetical order
+      the values are tuples (p_vs_q, p_vs_r, q_vs_r),
+        where p1_vs_p2 are dicts {'numgames': numgames between p1 and p2, 'player1_winrate': average score of p1 vs p2}
+      the only keys present are triples (p,q,r) for which all numgames are nonzero
+    '''
+    winrate_table = make_winrate_table(filename)
+    opponent_dict = make_opponent_dict(winrate_table)
+    triples = get_nonempty_triples(opponent_dict, winrate_table)
+    return triples
 
 
 #This is the standard boilerplate that calls the main() function.
