@@ -23,6 +23,14 @@ def main():
 https://database.lichess.org/
 '''
 
+def default_filename():
+    '''
+    For convenience
+    '''
+    fn = './data/lichess/lichess_db_standard_rated_2013-01.pgn'
+    return fn
+
+
 def lichess_pgn_to_data(filename, to_record=['WhiteElo', 'BlackElo', 'Result']):
     '''
     data = rating.lichess_pgn_to_data('./data/lichess/lichess_db_standard_rated_2013-01.pgn')
