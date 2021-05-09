@@ -31,6 +31,11 @@ def default_filename():
     return fn
 
 
+def all_lichess_keys():
+    all_keys = ['Event', 'Site', 'White', 'Black', 'Result', 'UTCDate', 'UTCTime', 'WhiteElo', 'BlackElo', 'WhiteRatingDiff', 'BlackRatingDiff', 'ECO', 'Opening', 'TimeControl', 'Termination']
+    return all_keys
+
+
 def lichess_pgn_to_data(filename, to_record=['WhiteElo', 'BlackElo', 'Result']):
     '''
     data = rating.lichess_pgn_to_data('./data/lichess/lichess_db_standard_rated_2013-01.pgn')
