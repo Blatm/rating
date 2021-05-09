@@ -209,30 +209,34 @@ def make_opponent_dict(winrate_table):
     return opponent_dict
 
 
-def get_nonempty_triples(opponent_dict):
-    triples = set()
+def get_nonempty_triples(opponent_dict, winrate_table):
+    triples = {}
     for p in opponent_dict:
         for q in opponent_dict[p]:
             for r in opponent_dict[q]:
                 if r in opponent_dict[p]:
                     trip = [p,q,r]
                     trip = tuple(sorted(trip))
-                    triples.add(trip)
+                    (ps,qs,rs) = trip
+                    p_vs_q = winrate_table[(ps,qs)]['player1_winrate']
+                    p_vs_r = winrate_table[(ps,rs)]['player1_winrate']
+                    q_vs_r = winrate_table[(qs,rs)]['player1_winrate']
+                    triples[trip] = (p_vs_q, p_vs_r, q_vs_r)
     return triples
 
 
-def get_useful_triples(winrate_table, triples):
+def get_useful_triples(triples):
     '''
     Returns a dict (p,q,r): (p_vs_q, p_vs_r, q_vs_r)
     The keys (p,q,r) are the triples for which the winrates aren't all 0.0 or 1.0
     '''
     useful_triples = {}
-    for (p,q,r) in triples:
-        p_vs_q = wr_table[(p,q)]['player1_winrate']
-        p_vs_r = wr_table[(p,r)]['player1_winrate']
-        q_vs_r = wr_table[(q,r)]['player1_winrate']
+    for trip in triples:
+        p_vs_q = triples[trip][0]
+        p_vs_r = triples[trip][1]
+        q_vs_r = triples[trip][2]
         if p_vs_q*(1-p_vs_q) + p_vs_r*(1-p_vs_r) + q_vs_r*(1-q_vs_r) > 0:
-            useful_triples[(p,q,r)] = (p_vs_q, p_vs_r, q_vs_r)
+            useful_triples[trip] = (p_vs_q, p_vs_r, q_vs_r)
     return useful_triples
 
 
