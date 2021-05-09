@@ -198,6 +198,28 @@ def make_winrate_table(filename):
     return winrate_table
 
 
+def make_opponent_dict(winrate_table):
+    opponent_dict = {}
+    for player_tup in winrate_table:
+        for player in player_tup:
+            if player not in opponent_dict:
+                opponent_dict[player] = set()
+        opponent_dict[player_tup[0]].add(player_tup[1])
+        opponent_dict[player_tup[1]].add(player_tup[0])
+    return opponent_dict
+
+
+def get_nonempty_triples(opponent_dict):
+    triples = set()
+    for p in opponent_dict:
+        for q in opponent_dict[p]:
+            for r in opponent_dict[q]:
+                if r in opponent_dict[p]:
+                    trip = [p,q,r]
+                    trip = tuple(sorted(trip))
+                    triples.add(trip)
+    return triples
+
 
 #This is the standard boilerplate that calls the main() function.
 if __name__ == '__main__':
