@@ -221,6 +221,22 @@ def get_nonempty_triples(opponent_dict):
     return triples
 
 
+def get_useful_triples(winrate_table, triples):
+    '''
+    Returns a dict (p,q,r): (p_vs_q, p_vs_r, q_vs_r)
+    The keys (p,q,r) are the triples for which the winrates aren't all 0.0 or 1.0
+    '''
+    useful_triples = {}
+    for (p,q,r) in triples:
+        p_vs_q = wr_table[(p,q)]['player1_winrate']
+        p_vs_r = wr_table[(p,r)]['player1_winrate']
+        q_vs_r = wr_table[(q,r)]['player1_winrate']
+        if p_vs_q*(1-p_vs_q) + p_vs_r*(1-p_vs_r) + q_vs_r*(1-q_vs_r) > 0:
+            useful_triples[(p,q,r)] = (p_vs_q, p_vs_r, q_vs_r)
+    return useful_triples
+
+
+
 #This is the standard boilerplate that calls the main() function.
 if __name__ == '__main__':
     if '-profile' in sys.argv:
