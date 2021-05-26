@@ -4,6 +4,7 @@ import sys
 #from sage.all import *
 import cProfile
 import numpy as np
+import random
 
 
 
@@ -107,7 +108,57 @@ def make_diff_data(data, min_elo=None, max_elo=None):
     return diff_data
 
 
-def make_winrate_data(diff_data, bin_size=5):
+def result_str_to_float(result_str):
+    if result_str == '1-0':
+        result_float = 1.0
+    elif result_str == '0-1':
+        result_float = 0.0
+    elif result_str == '1/2-1/2':
+        result_float = 0.5
+    else:
+        raise ValueError('In result_str_to_float, got result '+str(result_str))
+    return result_float
+
+
+def make_winrate_data(diff_data, num_samples_per_bin=400, std_only=True):
+    '''
+    Returns a dict of {binned elo diff: (winrate, error)}, where
+      binned elo diff is white_elo - black_elo, averaged across the bin,
+      and error is the std of the diffs making the bin if std_only, and the list of diffs in the bin otherwise
+    '''
+    diff_data = discard_extras(diff_data, num_samples_per_bin) # len(diff_data) % num_samples_per_bin == 0 after this
+    diff_data.sort(key = lambda tup: tup[0]) # sort by white_elo - black elo in ascending order
+    winrate_data = {}
+    for data_chunk_counter in range(len(diff_data)/num_samples_per_bin):
+        diff_samples = diff_data[num_samples_per_bin*data_chunk_counter : num_samples_per_bin*(data_chunk_counter+1)]
+        # diff samples is a list of tups (elo_diff, result), where result is '1-0', '0-1', or '1/2-1/2'
+        chunk_results = []
+        for (diff, result_str) in diff_samples:
+            result = result_str_to_float(result_str)
+            chunk_results.append(result)
+        binned_elo_diff = np.sum([datum[0] for datum in diff_samples])/float(len(diff_samples))
+        chunk_winrate = np.sum(chunk_results)/float(len(chunk_results))
+        if std_only:
+            error = np.std([tup[0] for tup in diff_samples])
+        else:
+            error = [tup[0] for tup in diff_samples]
+        winrate_data[binned_elo_diff] = (chunk_winrate, error) # in principle I should check that this key is unique...
+    return winrate_data
+
+
+def discard_extras(data, num_samples_per_bin):
+    num_to_discard = len(data) % num_samples_per_bin
+    index_list = list(range(len(data)))
+    random.shuffle(index_list)
+    indices_to_discard = index_list[:num_to_discard]
+    indices_to_discard.sort(reverse=True)
+    new_data = list(data)
+    for index in indices_to_discard:
+        del new_data[index]
+    return new_data
+
+
+def make_winrate_data_fixed_bins(diff_data, bin_size=5):
     '''
     Returns a dict of {binned elo diff: (winrate, error)}, where
       binned elo diff is white_elo - black_elo, rounded to the nearest bin_size
@@ -131,18 +182,12 @@ def get_binned_data(diff_data, bin_size=5):
         bin_val = round(diff/bin_size_float) * bin_size_int
         if bin_val not in binned_data:
             binned_data[bin_val] = []
-        if result == '1-0':
-            binned_data[bin_val].append(1)
-        elif result == '0-1':
-            binned_data[bin_val].append(0)
-        elif result == '1/2-1/2':
-            binned_data[bin_val].append(0.5)
-        else:
-            raise ValueError('In get_binned_data, got result '+str(result))
+        result_float = result_str_to_float(result)
+        binned_data[bin_val].append(result_float)
     return binned_data
 
 
-def file_to_winrates(filename, bin_size=5, min_elo=None, max_elo=None):
+def file_to_winrates_fixed_bins(filename, bin_size=5, min_elo=None, max_elo=None):
     '''
     Returns a dict of {binned elo diff: (winrate, error)}, where
       binned elo diff is white_elo - black_elo, rounded to the nearest bin_size
@@ -151,7 +196,20 @@ def file_to_winrates(filename, bin_size=5, min_elo=None, max_elo=None):
     data = lichess_pgn_to_data(filename)
     cleaned_data = get_cleaned_elos_and_results(data)
     diff_data = make_diff_data(cleaned_data, min_elo=min_elo, max_elo=max_elo)
-    winrate_data = make_winrate_data(diff_data, bin_size=bin_size)
+    winrate_data = make_winrate_data_fixed_bins(diff_data, bin_size=bin_size)
+    return winrate_data
+
+
+def file_to_winrates(filename, num_samples_per_bin=400, std_only_errors=True, min_elo=None, max_elo=None):
+    '''
+    Returns a dict of {binned elo diff: (winrate, error)}, where
+      binned elo diff is white_elo - black_elo, rounded to the nearest bin_size
+    Data in filename is filtered so that elos are between min_elo and max_elo
+    '''
+    data = lichess_pgn_to_data(filename)
+    cleaned_data = get_cleaned_elos_and_results(data)
+    diff_data = make_diff_data(cleaned_data, min_elo=min_elo, max_elo=max_elo)
+    winrate_data = make_winrate_data(diff_data, num_samples_per_bin=num_samples_per_bin, std_only=std_only_errors)
     return winrate_data
 
 
@@ -252,6 +310,75 @@ def file_to_nonempty_triples(filename):
     opponent_dict = make_opponent_dict(winrate_table)
     triples = get_nonempty_triples(opponent_dict, winrate_table)
     return triples
+
+
+#########################
+### Bayesian winrates ###
+#########################
+
+
+class WinrateDistribution(dict):
+    '''
+    This models a distribution of a true winrate.
+    It's a dict, and the keys are winrates, and the values are probabilities
+    '''
+    def __init__(self,*args,**kwargs):
+        if 'filename' in kwargs:
+            self.build_from_file(**kwargs)
+        else:
+            self = super(WinrateDistribution, self).__init__(*args, **kwargs)
+    
+    
+    def __repr__(self):
+        to_ret = ''
+        for key in sorted(self):
+            to_ret += str(key)+': '+str(self[key])+'\n'
+        if len(to_ret) > 0:
+            to_ret = to_ret[:-1]
+        return to_ret
+    
+
+    def build_from_file(self, filename, num_samples_per_bin=400, min_elo=None, max_elo=None):
+        '''
+        This generates a distribution based on the data in filename.
+        file_to_winrates has a constant number of games per bin,
+        so it's essentially answering the question of "given that two players are playing, what's the distribution of the true winrate?"
+        '''
+        winrate_dict = file_to_winrates(filename, num_samples_per_bin=num_samples_per_bin, min_elo=min_elo, max_elo=max_elo)
+        for elo_diff in winrate_dict:
+            (winrate, error) = winrate_dict[elo_diff]
+            self[winrate] = 1.0
+        self.normalize()
+    
+    
+    def normalize(self):
+        total_mass = 0.0
+        for key in self:
+            try:
+                total_mass += self[key]
+            except:
+                print self
+                raise
+        normalization_constant = total_mass
+        for key in self:
+            self[key] = self[key]/normalization_constant
+
+    
+    def update(self, result):
+        # result == 1 for win, 0 for loss
+        # Based on just 0,1, linear interpolation is prob of observing = (1 - result) + (2*result - 1)*winrate. Maybe that can be used for other results?
+        if type(result) == type(''):
+            result = result_str_to_float(result)
+        if result == 1:
+            for key in self:
+                self[key] *= key
+        elif result == 0:
+            for key in self:
+                self[key] *= 1-key
+        else:
+            raise NotImplementedError
+        self.normalize()
+
 
 
 #This is the standard boilerplate that calls the main() function.
