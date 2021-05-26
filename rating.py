@@ -366,17 +366,10 @@ class WinrateDistribution(dict):
     
     def update(self, result):
         # result == 1 for win, 0 for loss
-        # Based on just 0,1, linear interpolation is prob of observing = (1 - result) + (2*result - 1)*winrate. Maybe that can be used for other results?
         if type(result) == type(''):
             result = result_str_to_float(result)
-        if result == 1:
-            for key in self:
-                self[key] *= key
-        elif result == 0:
-            for key in self:
-                self[key] *= 1-key
-        else:
-            raise NotImplementedError
+        for key in self:
+            self[key] *= key**result * (1-key)**(1-result)
         self.normalize()
 
 
