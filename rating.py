@@ -352,14 +352,7 @@ class WinrateDistribution(dict):
     
     
     def normalize(self):
-        total_mass = 0.0
-        for key in self:
-            try:
-                total_mass += self[key]
-            except:
-                print self
-                raise
-        normalization_constant = total_mass
+        normalization_constant = self.kth_moment(0)
         for key in self:
             self[key] = self[key]/normalization_constant
 
@@ -371,6 +364,21 @@ class WinrateDistribution(dict):
         for key in self:
             self[key] *= key**result * (1-key)**(1-result)
         self.normalize()
+
+
+    def kth_moment(self, k):
+        moment_val = 0.0
+        for key in self:
+            moment_val += key**k * self[key]
+        return moment_val
+
+
+    def avg(self):
+        return self.kth_moment(1)
+
+
+    def std(self):
+        return self.kth_moment(2)
 
 
 
